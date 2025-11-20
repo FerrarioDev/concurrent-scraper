@@ -69,8 +69,9 @@ func Crawl(seedURL string, maxPages int, workers int) []Site {
 	visited := make(map[string]bool)
 
 	var mu sync.Mutex
-
 	var wg sync.WaitGroup
+
+	queueClosed := false
 
 	for i := range workers {
 		wg.Add(1)
@@ -105,7 +106,12 @@ func Crawl(seedURL string, maxPages int, workers int) []Site {
 		fmt.Printf("Scraped: %s (found %d links)\n", site.Title, len(site.Links))
 
 		if pagesScraped >= maxPages {
-			close(urlQueue)
+			mu.Lock()
+			if !queueClosed {
+				close(urlQueue)
+				queueClosed = true
+			}
+			mu.Unlock()
 			continue
 		}
 
@@ -122,8 +128,9 @@ func Crawl(seedURL string, maxPages int, workers int) []Site {
 		}
 
 		mu.Lock()
-		if len(urlQueue) == 0 && pagesScraped >= maxPages {
+		if len(urlQueue) == 0 && pagesScraped >= maxPages && !queueClosed {
 			close(urlQueue)
+			queueClosed = true
 		}
 		mu.Unlock()
 	}
